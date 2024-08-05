@@ -4,7 +4,9 @@ const express = require('express');
 const path = require('path');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
+const methodOverride = require('method-override')
 const Post = require('./models/Post');
+const Contact = require('./models/Contact');
 
 const app = express();
 
@@ -30,6 +32,8 @@ app.use(express.urlencoded({extended: false}));
 
 app.use(express.static('styles'));
 
+app.use(methodOverride('_method'))
+
 app.get('/', (req, res) => {
     const title = 'Home';
     res.render(createPath('index'), { title });
@@ -37,39 +41,89 @@ app.get('/', (req, res) => {
 
 app.get('/contacts', (req, res) => {
     const title = 'Contacts';
-    const contacts = [
-        { name: 'YouTube', link: 'http://youtube.com' },
-        { name: 'Twitter', link: 'http://twitter.com' },
-        { name: 'GitHub', link: 'http://github.com' },
-    ];
+    Contact
+        .find()
+        .then((contacts) => {
+            res.render(createPath('contacts'), {contacts, title})
+        })
+        .catch((error) => {
+            console.log(error);
+            res.render(createPath('error'), { title: 'Error' });
+        });
+});
 
-    res.render(createPath('contacts'), { contacts, title });
+app.get('/edit/:id', (req, res) => {
+    const title = 'Edit Post';
+    Post
+        .findById(req.params.id)
+        .then((post) => {
+            if (post) {
+                res.render(createPath('edit-post'), { title, post });
+            } else {
+                res.status(404).render(createPath('error'), { title: 'Error', message: 'Post not found' });
+            }
+        })
+        .catch((err) => {
+            console.log(err);
+            res.status(500).render(createPath('error'), { title: 'Error', message: 'An error occurred while retrieving the post' });
+        });
+});
+
+app.put('/edit/:id', (req, res) => {
+    const {title, author, text} = req.body;
+    const {id} = req.params;
+    Post
+        .findByIdAndUpdate(id, {title, author, text})
+        .then(result => res.redirect(`/posts/${id}`))
+        .catch((err) => {
+            console.log(err);
+            res.status(500).render(createPath('error'), { title: 'Error', message: 'An error occurred while updating the post' });
+        });
 });
 
 app.get('/posts/:id', (req, res) => {
     const title = 'Post';
-    const post = {
-        id: '1',
-        text: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Sapiente quidem provident, dolores, vero laboriosam nemo mollitia impedit unde fugit sint eveniet, minima odio ipsum sed recusandae aut iste aspernatur dolorem.',
-        title: 'Post title',
-        date: '05.05.2021',
-        author: 'DOK',
-    };
-    res.render(createPath('post'), { title, post });
+    Post
+        .findById(req.params.id)
+        .then((post) => {
+            if (post) {
+                res.render(createPath('post'), { title, post });
+            } else {
+                res.status(404).render(createPath('error'), { title: 'Error', message: 'Post not found' });
+            }
+        })
+        .catch((err) => {
+            console.log(err);
+            res.status(500).render(createPath('error'), { title: 'Error', message: 'An error occurred while retrieving the post' });
+        });
+});
+
+app.delete('/posts/:id', (req, res) => {
+    const title = 'Post';
+    Post
+        .findByIdAndDelete(req.params.id)
+        .then(result => {
+            res.sendStatus(200);
+        })
+        .catch((err) => {
+            console.log(err);
+            res.status(500).render(createPath('error'), { title: 'Error', message: 'An error occurred while retrieving the post' });
+        });
 });
 
 app.get('/posts', (req, res) => {
     const title = 'Posts';
-    const posts = [
-        {
-            id: '1',
-            text: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Sapiente quidem provident, dolores, vero laboriosam nemo mollitia impedit unde fugit sint eveniet, minima odio ipsum sed recusandae aut iste aspernatur dolorem.',
-            title: 'Post title',
-            date: '05.05.2021',
-            author: 'Yauhen',
-        }
-    ];
-    res.render(createPath('posts'), { title, posts });
+
+    Post
+        .find()
+        .sort({ createdAt: -1 })
+        .then((posts) => {
+            res.render(createPath('posts'), {posts, title});
+        })
+        .catch((err) => {
+            console.log(err);
+            res.render(createPath('error'), { title: 'Error' });
+        });
 });
 
 app.post('/add-post', (req, res) => {
@@ -77,7 +131,9 @@ app.post('/add-post', (req, res) => {
     const post = new Post({title, author, text});
     post
         .save()
-        .then((result) => res.send(result))
+        .then((result) => {
+            res.redirect('/posts');
+        })
         .catch((err) => {
             console.log(err);
             res.render(createPath('error'), { title: 'Error' });
